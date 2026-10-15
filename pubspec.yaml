@@ -1,4 +1,17 @@
+name: ehliyet_app
+description: Ehliyet Sinav 2026 - 600 Soru
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
 flutter:
+  uses-material-design: true
   assets:
     - assets/images/
     - assets/questions.json
