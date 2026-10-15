@@ -1,5 +1,5 @@
 name: ehliyet_app
-description: Ehliyet 2026
+description: CUMA SINAV - Ehliyet 2026
 publish_to: 'none'
 version: 1.0.0+1
 environment:
@@ -7,5 +7,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  video_player: ^2.8.2
 flutter:
   uses-material-design: true
