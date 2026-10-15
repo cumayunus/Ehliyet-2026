@@ -1,14 +1,5 @@
-name: ehliyet_2026
-description: Ehliyet Sinavi 2026 Offline
-publish_to: 'none'
-version: 1.0.0+1
-environment:
-  sdk: '>=3.2.0 <4.0.0'
-dependencies:
-  flutter:
-    sdk: flutter
-  cupertino_icons: ^1.0.6
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/questions.json
