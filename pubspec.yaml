@@ -1,27 +1,22 @@
-workflows:
-  android-workflow:
-    name: CUMA SINAV Build
-    max_build_duration: 60
-    instance_type: mac_mini_m2
-    environment:
-      flutter: stable
-      xcode: latest
-      cocoapods: default
-    scripts:
-      - name: Set App Name
-        script: |
-          echo "Setting app name to CUMA SINAV"
-      - name: Get Flutter packages
-        script: |
-          flutter pub get
-      - name: Build APK with CUMA SINAV name
-        script: |
-          flutter build apk --release --build-name="CUMA SINAV" --build-number=1
-    artifacts:
-      - build/**/outputs/**/*.apk
-      - build/**/outputs/**/AABs/*.aab
-      - build/ios/ipa/*.ipa
-    publishing:
-      email:
-        recipients:
-          - user@example.com
+name: ehliyet_app
+description: CUMA SINAV - Ehliyet 2026
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+  flutter: ">=3.16.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  video_player: ^2.8.2
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
