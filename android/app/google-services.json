@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "127458693688",
+    "project_id": "cuma-sinav-2026",
+    "storage_bucket": "cuma-sinav-2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:127458693688:android:4be97425e73b33a3e98ccd",
+        "android_client_info": {
+          "package_name": "com.example.cuma_sinav"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMCcW121GCwB3JMR0pq1n8oCXVkZ9_Ceo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
