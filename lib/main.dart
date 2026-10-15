@@ -1,60 +1,51 @@
 import 'package:flutter/material.dart';
-void main(){runApp(MaterialApp(home:QuizApp(),debugShowCheckedModeBanner:false));}
-class Question{final String qTr,qAr; final List<String> oTr,oAr; final int correct; Question({required this.qTr,required this.qAr,required this.oTr,required this.oAr,required this.correct});}
-List<Question> generate600(){
-  final base=[
-    ["Kirmizi isikta ne yapilir?","ماذا تفعل عند الإشارة الحمراء؟",["Dur","Gec","Hizlan","Korna"],["قف","اعبر","اسرع","بوق"],0],
-    ["Dur levhasi?","إشارة قف؟",["Dur ve kontrol","Yavasla","Hizlan","Park"],["قف وتأكد","خفف","اسرع","اركن"],0],
-    ["Emniyet kemeri?","حزام الأمان؟",["Her zaman","Hayir","Sehir disi","On koltuk"],["دائما","لا","خارج المدينة","أمامي"],0],
-    ["Sok pozisyonu?","وضعية الصدمة؟",["Ayaklar yukari","Bas yukari","Otur","Yuz ustu"],["الأقدام للأعلى","الرأس للأعلى","جلوس","على البطن"],0],
-    ["Kalp masaji?","تدليك القلب؟",["100/dk","60/dk","30/dk","15/dk"],["100/د","60/د","30/د","15/د"],0],
-    ["Alkol siniri?","حد الكحول؟",["0.50 promil","1.0","0.20","Yok"],["0.50","1.0","0.20","لا يوجد"],0],
-    ["Fren mesafesi?","مسافة الفرملة؟",["Fren basincindan durana","Gaz suresi","Lastik","Yag"],["من الضغط للتوقف","مدة البنزين","الإطار","الزيت"],0],
-    ["Uyari isareti?","إشارة تحذير؟",["Uyari","Dur","Park","Hiz"],["تحذير","قف","موقف","سرعة"],0],
-    ["Aku biterse?","البطارية نفذت؟",["Mars basmaz","Fren tutmaz","Lastik patlar","Yag biter"],["المرش لا يعمل","الفرامل لا","الإطار ينفجر","الزيت ينتهي"],0],
-    ["Ilk yardim ilk?","أول إسعاف؟",["Guvenlik","Su ver","Hareket","Ilac"],["أمن المكان","اعط ماء","حركه","دواء"],0],
+import 'dart:async';
+import 'package:video_player/video_player.dart';
+
+void main(){runApp(MaterialApp(home:CumaApp(),debugShowCheckedModeBanner:false, theme: ThemeData(useMaterial3:true, colorScheme: ColorScheme.fromSeed(seedColor: Color(0xFFD32F2F)))));}
+
+class Q{
+  final String tr,ar; final List<String> oTr,oAr; final int c; final String expTr,expAr,img; final String? vid;
+  Q({required this.tr,required this.ar,required this.oTr,required this.oAr,required this.c,required this.expTr,required this.expAr,required this.img,this.vid});
+}
+
+List<Q> gen(){
+  final b=[
+    ["Kirmizi isikta?","عند الأحمر؟",["Dur","Gec","Hizlan","Korna"],["قف","اعبر","اسرع","بوق"],0,"Kirmizida durulur zorunlu","الأحمر قف إجباري","https://images.unsplash.com/photo-1494783367193-149034c05e8f?w=400",null],
+    ["Dur levhasi anlami?","معنى قف؟",["Tam dur kontrol","Yavasla","Park","Hizlan"],["قف وتأكد","خفف","اركن","اسرع"],0,"Teker tamamen durmali","العجلة يجب أن تقف تماما","https://images.unsplash.com/photo-1517524008697-1db8ec3e0f67?w=400",null],
+    ["Ilk yardim - Kalp masaji?","إسعاف - تدليك قلب؟",["100/dk bas","60","30","Dur"],["100 ضغطة/د","60","30","قف"],0,"Dakikada 100 basi ideal","100 بالدقيقة مثالي","https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=400","https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4"],
+    ["Yaya gecidinde?","عند ممر المشاة؟",["Yayaya yol ver","Korna","Hizlan","Gecme"],["اعط المشاة","بوق","اسرع","تجاوز"],0,"Yaya her zaman oncelikli","المشاة دائما أولوية","https://images.unsplash.com/photo-1590422749897-47036da0b0ff?w=400",null],
+    ["Hiz siniri sehir ici?","السرعة داخل المدينة؟",["50","90","110","130"],["50","90","110","130"],0,"Sehir ici limit 50 km","داخل المدينة 50","https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?w=400",null],
+    ["Emniyet kemeri?","حزام الأمان؟",["Her zaman tak","Sehir disi","Hayir","On koltuk"],["دائما","خارج المدينة","لا","أمامي فقط"],0,"Kemer hayat kurtarir","الحزام ينقذ الحياة","https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400",null],
+    ["Takip mesafesi?","مسافة التتبع؟",["Hizin yarisi","Hiz kadar","10m","50m"],["نصف السرعة","نفس السرعة","10م","50م"],0,"Guvende kal hiz/2","للأمان نصف السرعة","https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=400",null],
+    ["Ambulans gelince?","عند قدوم الإسعاف؟",["Hemen yol ver","Durma","Korna cal","Hizlan"],["اعط طريق فورا","لا تقف","بوق","اسرع"],0,"Acil araca derhal yol ver","اعط الطوارئ فورا","https://images.unsplash.com/photo-1587740924340-c7a65dd9a2e2?w=400",null],
+    ["Sok pozisyonu?","وضعية الصدمة؟",["Ayak 30cm yukari","Bas yukari","Otur","Yuzustu"],["الأرجل 30سم فوق","الرأس فوق","جلوس","على البطن"],0,"Ayak yukari kan beyne gider","رفع الأرجل يوصل الدم للمخ","https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?w=400",null],
+    ["Alkol siniri?","حد الكحول؟",["0.50 promil","1.0","0.20","0"],["0.50","1.0","0.20","0"],0,"Hususi 0.50 promil","الخاصة 0.50","https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=400",null],
   ];
-  List<Question> list=[];
-  for(int i=0;i<600;i++){
-    var b=base[i%base.length];
-    list.add(Question(qTr:"${b[0]} ${i+1}", qAr:"${b[1]} ${i+1}", oTr:List<String>.from(b[2] as List), oAr:List<String>.from(b[3] as List), correct:b[4] as int));
-  }
-  return list;
+  List<Q> l=[]; for(int i=0;i<600;i++){var x=b[i%b.length]; l.add(Q(tr:"${x[0]} ${i+1}",ar:"${x[1]} ${i+1}",oTr:List<String>.from(x[2] as List),oAr:List<String>.from(x[3] as List),c:x[4] as int,expTr:x[5] as String,expAr:x[6] as String,img:x[7] as String,vid:x[8] as String?));} return l;
 }
-class QuizApp extends StatefulWidget{@override _QuizAppState createState()=>_QuizAppState();}
-class _QuizAppState extends State<QuizApp>{
-  bool isArabic=true; final allQs=generate600();
-  @override Widget build(BuildContext context){
-    return Scaffold(
-      appBar:AppBar(title:Text(isArabic?'رخصة 2026 - ${allQs.length} سؤال':'Ehliyet ${allQs.length} Soru'),actions:[TextButton(onPressed:(){setState(()=>isArabic=!isArabic);},child:Text(isArabic?'TR':'العربية',style:TextStyle(color:Colors.white)))]),
-      body:ListView(padding:EdgeInsets.all(16),children:[
-        Card(child:ListTile(title:Text(isArabic?'600 سؤال جاهز':'600 Soru Hazir'),subtitle:Text(isArabic?'نفس نظام الامتحان الحقيقي':'Gercek sinav sistemi'))),
-        SizedBox(height:12),
-        ElevatedButton(onPressed:(){Navigator.push(context,MaterialPageRoute(builder:(_)=>ExamScreen(allQs:allQs.take(50).toList(),isArabic:isArabic)));},child:Text(isArabic?'امتحان 50 سؤال (حقيقي)':'50 Soruluk Sinav')),
-        SizedBox(height:8),
-        ElevatedButton(onPressed:(){Navigator.push(context,MaterialPageRoute(builder:(_)=>ExamScreen(allQs:allQs,isArabic:isArabic)));},child:Text(isArabic?'امتحان شامل 600':'600 Soruluk Sinav')),
-      ]),
-    );
-  }
-}
-class ExamScreen extends StatefulWidget{final List<Question> allQs; final bool isArabic; ExamScreen({required this.allQs,required this.isArabic});@override _ExamScreenState createState()=>_ExamScreenState();}
-class _ExamScreenState extends State<ExamScreen>{
-  int idx=0; List<int?> ans=[];
-  @override void initState(){super.initState();ans=List.filled(widget.allQs.length,null);}
-  @override Widget build(BuildContext context){
-    final q=widget.allQs[idx];
-    return Scaffold(
-      appBar:AppBar(title:Text('${idx+1}/${widget.allQs.length}')),
-      body:Column(children:[
-        Padding(padding:EdgeInsets.all(16),child:Text(widget.isArabic?q.qAr:q.qTr,style:TextStyle(fontSize:18,fontWeight:FontWeight.bold),textAlign:TextAlign.center)),
-       ...List.generate(4,(i){final t=widget.isArabic?q.oAr[i]:q.oTr[i]; return Card(child:RadioListTile(value:i,groupValue:ans[idx],title:Text(t),onChanged:(v){setState(()=>ans[idx]=v as int);}));}),
-        Spacer(),
-        Padding(padding:EdgeInsets.all(12),child:Row(children:[
-          Expanded(child:ElevatedButton(onPressed:idx>0?()=>setState(()=>idx--):null,child:Text(widget.isArabic?'رجوع':'Geri'))),
-          SizedBox(width:12),
-          Expanded(child:ElevatedButton(onPressed:(){if(idx<widget.allQs.length-1) setState(()=>idx++); else{int co=0;for(int j=0;j<widget.allQs.length;j++) if(ans[j]==widget.allQs[j].correct) co++;showDialog(context:context,builder:(_)=>AlertDialog(title:Text(widget.isArabic?'النتيجة':'Sonuc'),content:Text('$co/${widget.allQs.length}'),actions:[TextButton(onPressed:(){Navigator.pop(context);},child:Text('OK'))]));}},child:Text(idx==widget.allQs.length-1?(widget.isArabic?'إنهاء':'Bitir'):(widget.isArabic?'التالي':'Ileri')))),
-        ]))
-      ]),
-    );
-  }
-}
+
+class CumaApp extends StatefulWidget{@override _CumaAppState createState()=>_CumaAppState();}
+class _CumaAppState extends State<CumaApp>{bool ar=true; final qs=gen(); @override Widget build(BuildContext context){return Scaffold(appBar:AppBar(backgroundColor:Color(0xFFD32F2F),centerTitle:true,title:Text('CUMA SINAV',style:TextStyle(color:Colors.white,fontWeight:FontWeight.w900,letterSpacing:1.2)),actions:[Padding(padding:EdgeInsets.all(8),child:ElevatedButton(style:ElevatedButton.styleFrom(backgroundColor:Colors.white,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20))),onPressed:(){setState(()=>ar=!ar);},child:Text(ar?'TR':'عربي',style:TextStyle(color:Color(0xFFD32F2F),fontWeight:FontWeight.bold))))]),body:ListView(padding:EdgeInsets.all(16),children:[
+Card(elevation:4,child:Padding(padding:EdgeInsets.all(20),child:Column(children:[Icon(Icons.school,size:60,color:Color(0xFFD32F2F)),SizedBox(height:10),Text('CUMA SINAV',style:TextStyle(fontSize:28,fontWeight:FontWeight.w900,color:Color(0xFFD32F2F))),Text(ar?'600 سؤال مع صورة وفيديو':'600 Resimli Videolu Soru',style:TextStyle(fontWeight:FontWeight.bold)),SizedBox(height:10),Wrap(spacing:8,children:[Chip(label:Text('📷 صورة')),Chip(label:Text('🎥 فيديو')),Chip(label:Text('⏱️ 45 دقيقة')),Chip(label:Text('📖 شرح'))])]))),
+SizedBox(height:16),
+ElevatedButton.icon(icon:Icon(Icons.timer),label:Text(ar?'امتحان رسمي 50 سؤال - CUMA':'Resmi Sinav 50 - CUMA',style:TextStyle(fontSize:16,fontWeight:FontWeight.bold)),style:ElevatedButton.styleFrom(backgroundColor:Color(0xFFD32F2F),foregroundColor:Colors.white,padding:EdgeInsets.all(18),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(12))),onPressed:(){Navigator.push(context,MaterialPageRoute(builder:(_)=>Exam(all:(qs..shuffle()).take(50).toList(),ar:ar)));}),
+SizedBox(height:10),
+OutlinedButton.icon(icon:Icon(Icons.menu_book),label:Text(ar?'تدريب شامل 600 سؤال':'600 Soru Antrenman'),style:OutlinedButton.styleFrom(padding:EdgeInsets.all(16)),onPressed:(){Navigator.push(context,MaterialPageRoute(builder:(_)=>Exam(all:qs,ar:ar)));}),
+])));}}
+
+class Exam extends StatefulWidget{final List<Q> all; final bool ar; Exam({required this.all,required this.ar});@override _ExamState createState()=>_ExamState();}
+class _ExamState extends State<Exam>{int idx=0; List<int?> ans=[]; int sec=45*60; Timer? ti; bool show=false;
+@override void initState(){super.initState();ans=List.filled(widget.all.length,null);ti=Timer.periodic(Duration(seconds:1),(x){if(sec>0)setState(()=>sec--);else{x.cancel();finish();}});} @override void dispose(){ti?.cancel();super.dispose();}
+void finish(){int co=0;List<Q> wrong=[];for(int i=0;i<widget.all.length;i++){if(ans[i]==widget.all[i].c)co++;else if(ans[i]!=null)wrong.add(widget.all[i]);} showDialog(context:context,barrierDismissible:false,builder:(_)=>AlertDialog(title:Text('CUMA SINAV - ${widget.ar?'النتيجة':'Sonuc'}'),content:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('${widget.ar?'الصحيح':'Dogru'}: $co/${widget.all.length}',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),Text(co>=35?'✅ ${widget.ar?'ناجح':'GECTI'}':'❌ ${widget.ar?'راسب':'KALDI'}',style:TextStyle(fontSize:18,color:co>=35?Colors.green:Colors.red)),if(wrong.isNotEmpty)...[Divider(),Text(widget.ar?'الأخطاء:':'Yanlislar:'),...wrong.take(5).map((q)=>Padding(padding:EdgeInsets.only(top:4),child:Text('- ${widget.ar?q.ar:q.tr}',style:TextStyle(fontSize:12))))]])),actions:[TextButton(onPressed:(){Navigator.pop(context);Navigator.pop(context);},child:Text('OK'))]));}
+@override Widget build(BuildContext context){final q=widget.all[idx]; final m=(sec~/60).toString().padLeft(2,'0'); final s=(sec%60).toString().padLeft(2,'0'); return Scaffold(appBar:AppBar(title:Text('CUMA SINAV ${idx+1}/${widget.all.length} $m:$s'),backgroundColor:sec<300?Colors.red:Color(0xFFD32F2F),foregroundColor:Colors.white),body:Column(children:[
+LinearProgressIndicator(value:(idx+1)/widget.all.length,color:Color(0xFFD32F2F),backgroundColor:Colors.grey.shade300),
+Container(height:200,width:double.infinity,color:Colors.black12,child:q.vid!=null?VideoW(url:q.vid!):Image.network(q.img,fit:BoxFit.cover,width:double.infinity,errorBuilder:(a,b,c)=>Icon(Icons.image,size:80))),
+Padding(padding:EdgeInsets.all(16),child:Text(widget.ar?q.ar:q.tr,style:TextStyle(fontSize:19,fontWeight:FontWeight.bold),textAlign:TextAlign.center)),
+...List.generate(4,(i){final txt=widget.ar?q.oAr[i]:q.oTr[i]; final sel=ans[idx]==i; final cor=q.c==i; Color? col; if(show&&ans[idx]!=null){if(cor)col=Colors.green.shade100; else if(sel)col=Colors.red.shade100;} return Padding(padding:EdgeInsets.symmetric(horizontal:12,vertical:2),child:Card(color:col,elevation:sel?4:1,child:RadioListTile(value:i,groupValue:ans[idx],title:Text(txt,style:TextStyle(fontWeight:sel?FontWeight.bold:FontWeight.normal)),onChanged:(v){setState((){ans[idx]=v as int;show=true;});})));}),
+if(show&&ans[idx]!=null)Padding(padding:EdgeInsets.all(12),child:Container(padding:EdgeInsets.all(12),decoration:BoxDecoration(color:Colors.amber.shade100,borderRadius:BorderRadius.circular(10),border:Border.all(color:Colors.amber)),child:Row(children:[Icon(Icons.lightbulb,color:Colors.orange),SizedBox(width:8),Expanded(child:Text(widget.ar?q.expAr:q.expTr,style:TextStyle(fontWeight:FontWeight.bold)))]))),
+Spacer(),
+Padding(padding:EdgeInsets.all(12),child:Row(children:[Expanded(child:OutlinedButton(onPressed:idx>0?(){setState((){idx--;show=ans[idx]!=null;});}:null,child:Text(widget.ar?'رجوع':'Geri'))),SizedBox(width:12),Expanded(child:ElevatedButton(style:ElevatedButton.styleFrom(backgroundColor:Color(0xFFD32F2F),foregroundColor:Colors.white,padding:EdgeInsets.all(14)),onPressed:(){if(idx<widget.all.length-1)setState((){idx++;show=ans[idx]!=null;});else finish();},child:Text(idx==widget.all.length-1?(widget.ar?'إنهاء CUMA':'Bitir'):(widget.ar?'التالي':'Ileri'))))]))]));}}
+
+class VideoW extends StatefulWidget{final String url; VideoW({required this.url});@override _VideoWState createState()=>_VideoWState();}
+class _VideoWState extends State<VideoW>{late VideoPlayerController c; @override void initState(){super.initState();c=VideoPlayerController.network(widget.url)..initialize().then((_)=>setState((){}));} @override void dispose(){c.dispose();super.dispose();} @override Widget build(BuildContext context){return c.value.isInitialized?Stack(alignment:Alignment.center,children:[AspectRatio(aspectRatio:c.value.aspectRatio,child:VideoPlayer(c)),IconButton(icon:Icon(c.value.isPlaying?Icons.pause_circle:Icons.play_circle,size:60,color:Colors.white),onPressed:(){setState((){c.value.isPlaying?c.pause():c.play();});})]):Center(child:CircularProgressIndicator(color:Colors.white));}}
