@@ -27,3 +27,4 @@ flutter:
 
 dependency_overrides:
   flutter_inappwebview: ^6.0.0
+  flutter_inappwebview_android: ^1.1.3
