@@ -11,8 +11,8 @@ jobs:
           java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.5'
-          cache: true
+          flutter-version: '3.22.3'
+          channel: 'stable'
 
       - run: flutter clean
       - run: flutter pub get
@@ -25,4 +25,3 @@ jobs:
         with:
           name: CUMA-SINAV-APK
           path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: warn
