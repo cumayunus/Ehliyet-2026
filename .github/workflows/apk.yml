@@ -16,12 +16,11 @@ jobs:
 
       - run: flutter pub get
 
+      - name: Generate app icon
+        run: dart run flutter_launcher_icons
+
       - name: Build APK
         run: flutter build apk --release
-
-      - name: Find APK
-        if: always()
-        run: find . -name "*.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
