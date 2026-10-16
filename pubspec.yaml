@@ -1,5 +1,6 @@
 name: cuma_sinav
-description: CUMA SINAV - Ehliyet Sinav Uygulamasi
+description:
+ CUMA SINAV - Ehliyet Sinav Uygulamasi
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -12,7 +13,10 @@ dependencies:
   cupertino_icons: ^1.0.2
   firebase_core: ^2.24.0
   cloud_firestore: ^4.15.0
+  youtube_player_flutter: 8.1.2
   flutter_inappwebview: ^6.0.0
+  http: ^1.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -20,3 +24,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+dependency_overrides:
+  flutter_inappwebview: ^6.0.0
