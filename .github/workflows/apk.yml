@@ -19,16 +19,21 @@ jobs:
           flutter-version: '3.24.5'
 
       - run: flutter clean
+      - run: flutter pub get
 
-      - run: |
-          rm -f pubspec.lock
-          flutter pub get
+      - name: Build APK directly with Gradle
+        run: |
+          cd android
+         ./gradlew assembleRelease --stacktrace
 
-      - run: flutter pub deps
-
-      - run: flutter build apk --release
+      - name: Show APK location
+        run: |
+          find. -name "*.apk" -type f
 
       - uses: actions/upload-artifact@v4
         with:
           name: CUMA-SINAV-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            android/app/build/outputs/apk/release/app-release.apk
+            **/*.apk
