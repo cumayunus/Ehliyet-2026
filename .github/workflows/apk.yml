@@ -11,14 +11,17 @@ jobs:
           java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.3'
+          flutter-version: '3.24.5'
           channel: 'stable'
 
-      - run: flutter clean
       - run: flutter pub get
 
       - name: Build APK
         run: flutter build apk --release
+
+      - name: Find APK
+        if: always()
+        run: find . -name "*.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
