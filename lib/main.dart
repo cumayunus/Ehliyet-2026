@@ -2,12 +2,11 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// رمز دخول لوحة المدرّس (غيّره)
-const String adminPin = 'Cuma5683';
 // عدد أسئلة الامتحان الواحد
 const int examSize = 50;
 
@@ -31,9 +30,11 @@ const Map<String, Map<String, String>> _t = {
     'dark': 'Karanlik mod',
     'best': 'En iyi sonuc',
     'reset': 'Sonucu sifirla',
-    'enterPin': 'Ogretmen sifresi',
-    'open': 'GIRIS',
-    'wrongPin': 'Yanlis sifre',
+    'email': 'E-posta',
+    'password': 'Sifre',
+    'login': 'GIRIS YAP',
+    'logout': 'Cikis',
+    'loginError': 'Giris basarisiz',
     'addVideo': 'Video ekle',
     'videoTitle': 'Video basligi',
     'ytLink': 'Youtube link veya ID',
@@ -71,9 +72,11 @@ const Map<String, Map<String, String>> _t = {
     'dark': 'الوضع الداكن',
     'best': 'أفضل نتيجة',
     'reset': 'تصفير النتيجة',
-    'enterPin': 'رمز المدرّس',
-    'open': 'دخول',
-    'wrongPin': 'الرمز غير صحيح',
+    'email': 'البريد الإلكتروني',
+    'password': 'كلمة المرور',
+    'login': 'تسجيل الدخول',
+    'logout': 'خروج',
+    'loginError': 'فشل تسجيل الدخول',
     'addVideo': 'إضافة فيديو',
     'videoTitle': 'عنوان الفيديو',
     'ytLink': 'رابط يوتيوب أو المعرّف',
@@ -489,8 +492,9 @@ class AdminSayfasi extends StatefulWidget {
 }
 
 class _AdminSayfasiState extends State<AdminSayfasi> {
-  bool unlocked = false;
-  final _pin = TextEditingController();
+  final _email = TextEditingController();
+  final _pass = TextEditingController();
+  bool _busy = false;
 
   final _baslik = TextEditingController();
   final _youtube = TextEditingController();
@@ -508,6 +512,18 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
 
   void _snack(String m) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+
+  Future<void> _login() async {
+    setState(() => _busy = true);
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: _email.text.trim(), password: _pass.text);
+      _pass.clear();
+    } catch (e) {
+      _snack(t('loginError'));
+    }
+    if (mounted) setState(() => _busy = false);
+  }
 
   Future<void> _videoEkle() async {
     if (_baslik.text.trim().isEmpty || _youtube.text.trim().isEmpty) return;
@@ -605,37 +621,63 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
 
   @override
   Widget build(BuildContext context) {
-    if (!unlocked) {
-      return Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextField(
-              controller: _pin,
-              obscureText: true,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(labelText: t('enterPin')),
-            ),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: () {
-                if (_pin.text == adminPin) {
-                  setState(() => unlocked = true);
-                } else {
-                  _snack(t('wrongPin'));
-                }
-              },
-              child: Text(t('open')),
-            ),
-          ],
-        ),
-      );
-    }
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.data == null) return _loginForm();
+        return _panel(snap.data!);
+      },
+    );
+  }
 
+  Widget _loginForm() {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          TextField(
+            controller: _email,
+            keyboardType: TextInputType.emailAddress,
+            textDirection: TextDirection.ltr,
+            decoration: InputDecoration(labelText: t('email')),
+          ),
+          TextField(
+            controller: _pass,
+            obscureText: true,
+            textDirection: TextDirection.ltr,
+            decoration: InputDecoration(labelText: t('password')),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _busy ? null : _login,
+            child: _busy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : Text(t('login')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _panel(User user) {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
+        ListTile(
+          leading: const Icon(Icons.verified_user),
+          title: Text(user.email ?? ''),
+          trailing: TextButton(
+            onPressed: () => FirebaseAuth.instance.signOut(),
+            child: Text(t('logout')),
+          ),
+        ),
         Card(
           child: ExpansionTile(
             title: Text(t('addVideo')),
