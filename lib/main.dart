@@ -47,6 +47,7 @@ const Map<String, Map<String, String>> _t = {
     'optAr': 'Sik (Arapca)',
     'correct': 'Dogru sik',
     'imageUrl': 'Resim linki (istege bagli)',
+    'videoUrl': 'Video linki veya ID (istege bagli)',
     'bulk': 'Toplu soru aktar (JSON)',
     'bulkHint': 'JSON listesini buraya yapistirin',
     'import': 'AKTAR',
@@ -89,6 +90,7 @@ const Map<String, Map<String, String>> _t = {
     'optAr': 'الخيار (عربي)',
     'correct': 'الخيار الصحيح',
     'imageUrl': 'رابط الصورة (اختياري)',
+    'videoUrl': 'رابط فيديو يوتيوب أو المعرّف (اختياري)',
     'bulk': 'استيراد أسئلة دفعة واحدة (JSON)',
     'bulkHint': 'الصق قائمة JSON هنا',
     'import': 'استيراد',
@@ -415,6 +417,10 @@ class _QuizSayfasiState extends State<QuizSayfasi> {
     final siklarAr = _list(q['siklarAr']);
     final dogru = (q['dogruIndex'] as num?)?.toInt() ?? 0;
     final resim = (q['resim'] ?? '').toString();
+    final videoRaw = (q['video'] ?? '').toString().trim();
+    final videoId = videoRaw.isEmpty
+        ? ''
+        : (YoutubePlayer.convertUrlToId(videoRaw) ?? videoRaw);
     final ar = appState.lang == 'ar';
 
     return Scaffold(
@@ -433,6 +439,11 @@ class _QuizSayfasiState extends State<QuizSayfasi> {
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => const SizedBox.shrink(),
               ),
+            ),
+          if (videoId.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: QuestionVideo(key: ValueKey('v$index'), videoId: videoId),
             ),
           Text(soru,
               style:
@@ -484,6 +495,37 @@ class _QuizSayfasiState extends State<QuizSayfasi> {
   }
 }
 
+class QuestionVideo extends StatefulWidget {
+  final String videoId;
+  const QuestionVideo({super.key, required this.videoId});
+  @override
+  State<QuestionVideo> createState() => _QuestionVideoState();
+}
+
+class _QuestionVideoState extends State<QuestionVideo> {
+  late YoutubePlayerController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = YoutubePlayerController(
+      initialVideoId: widget.videoId,
+      flags: const YoutubePlayerFlags(autoPlay: false, mute: false),
+    );
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return YoutubePlayer(controller: _c, showVideoProgressIndicator: true);
+  }
+}
+
 // ---------------- 3. لوحة المدرّس ----------------
 class AdminSayfasi extends StatefulWidget {
   const AdminSayfasi({super.key});
@@ -506,6 +548,7 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
   final List<TextEditingController> _optAr =
       List.generate(4, (_) => TextEditingController());
   final _resim = TextEditingController();
+  final _video = TextEditingController();
   int _dogru = 0;
 
   final _bulk = TextEditingController();
@@ -565,9 +608,11 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
         'siklarAr': included.map((i) => ar[i]).toList(),
         'dogruIndex': included.indexOf(_dogru),
         'resim': _resim.text.trim(),
+        'video': _video.text.trim(),
         'tarih': FieldValue.serverTimestamp(),
       });
       _soru.clear();
+      _video.clear();
       _soruAr.clear();
       _resim.clear();
       for (final c in _opt) {
@@ -601,6 +646,7 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
           'siklarAr': _list(e['siklarAr']),
           'dogruIndex': (e['dogruIndex'] as num?)?.toInt() ?? 0,
           'resim': (e['resim'] ?? '').toString(),
+          'video': (e['video'] ?? '').toString(),
           'tarih': FieldValue.serverTimestamp(),
         });
         n++;
@@ -720,6 +766,9 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
               TextField(
                   controller: _resim,
                   decoration: InputDecoration(labelText: t('imageUrl'))),
+              TextField(
+                  controller: _video,
+                  decoration: InputDecoration(labelText: t('videoUrl'))),
               const SizedBox(height: 8),
               DropdownButtonFormField<int>(
                 value: _dogru,
