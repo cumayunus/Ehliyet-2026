@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,10 +9,88 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// عدد أسئلة الامتحان الواحد
 const int examSize = 50;
+const int realExamMinutes = 45;
+const int passPercent = 70;
 
-// ---------------- اللغات ----------------
+class Question {
+  const Question({
+    required this.id,
+    required this.soru,
+    this.soruAr = '',
+    required this.siklar,
+    this.siklarAr = const [],
+    required this.dogruIndex,
+    this.resim = '',
+    this.video = '',
+    this.kategori = '',
+    this.aciklama = '',
+    this.aciklamaAr = '',
+  });
+
+  final String id;
+  final String soru;
+  final String soruAr;
+  final List<String> siklar;
+  final List<String> siklarAr;
+  final int dogruIndex;
+  final String resim;
+  final String video;
+  final String kategori;
+  final String aciklama;
+  final String aciklamaAr;
+
+  factory Question.fromMap(String id, Map<String, dynamic> map) {
+    final rawSiklar = map['siklar'];
+    final rawSiklarAr = map['siklarAr'];
+    final rawList = rawSiklar is List ? rawSiklar : const <dynamic>[];
+    final rawListAr = rawSiklarAr is List ? rawSiklarAr : const <dynamic>[];
+
+    final siklar = rawList
+        .map((e) => e.toString().trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    final siklarAr = rawListAr.map((e) => e.toString()).toList();
+
+    int safeIndex = 0;
+    final value = map['dogruIndex'];
+    if (value is num) {
+      safeIndex = value.toInt();
+    }
+    if (safeIndex < 0) safeIndex = 0;
+    if (siklar.isNotEmpty && safeIndex >= siklar.length) safeIndex = 0;
+
+    return Question(
+      id: id,
+      soru: (map['soru'] ?? '').toString().trim(),
+      soruAr: (map['soruAr'] ?? '').toString(),
+      siklar: siklar,
+      siklarAr: siklarAr,
+      dogruIndex: safeIndex,
+      resim: (map['resim'] ?? '').toString().trim(),
+      video: (map['video'] ?? '').toString().trim(),
+      kategori: (map['kategori'] ?? '').toString().trim(),
+      aciklama: (map['aciklama'] ?? '').toString(),
+      aciklamaAr: (map['aciklamaAr'] ?? '').toString(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'soru': soru,
+        'soruAr': soruAr,
+        'siklar': siklar,
+        'siklarAr': siklarAr,
+        'dogruIndex': dogruIndex,
+        'resim': resim,
+        'video': video,
+        'kategori': kategori,
+        'aciklama': aciklama,
+        'aciklamaAr': aciklamaAr,
+      };
+}
+
+enum ExamMode { practice, real }
+
 const Map<String, Map<String, String>> _t = {
   'tr': {
     'videos': 'Dersler',
@@ -54,6 +134,29 @@ const Map<String, Map<String, String>> _t = {
     'imported': 'soru aktarildi',
     'error': 'Hata',
     'fillMore': 'Soru ve en az 2 sik gerekli',
+    'practice': 'Pratik',
+    'realExam': 'Gercek sinav',
+    'examMode': 'Sinav modu',
+    'flag': 'Isaretle',
+    'removeFlag': 'Isareti kaldir',
+    'category': 'Kategori',
+    'all': 'Hepsi',
+    'wrongAnswers': 'Yanlislar',
+    'retryWrong': 'Yanlislari tekrar et',
+    'failed': 'Basarisiz',
+    'passed': 'Gecti',
+    'statistics': 'Istatistik',
+    'favorites': 'Favoriler',
+    'mistakes': 'Hatalarım',
+    'avg': 'Ortalama',
+    'bestShort': 'En iyi',
+    'trend': 'Egilim',
+    'timeLeft': 'Kalan sure',
+    'confirmFinish': 'Sinavi bitirmek istiyor musunuz?',
+    'explanation': 'Aciklama',
+    'yourAnswer': 'Cevabiniz',
+    'correctAnswer': 'Dogru cevap',
+    'questionGrid': 'Soru ızgarası',
   },
   'ar': {
     'videos': 'الدروس',
@@ -97,23 +200,88 @@ const Map<String, Map<String, String>> _t = {
     'imported': 'سؤال تم استيراده',
     'error': 'خطأ',
     'fillMore': 'السؤال وخياران على الأقل مطلوبة',
+    'practice': 'تمرين',
+    'realExam': 'امتحان حقيقي',
+    'examMode': 'وضع الامتحان',
+    'flag': 'علامة',
+    'removeFlag': 'إزالة العلامة',
+    'category': 'الفئة',
+    'all': 'الكل',
+    'wrongAnswers': 'الإجابات الخاطئة',
+    'retryWrong': 'إعادة الإجابات الخاطئة',
+    'failed': 'فشل',
+    'passed': 'نجح',
+    'statistics': 'الإحصاءات',
+    'favorites': 'المفضلة',
+    'mistakes': 'أخطائي',
+    'avg': 'المتوسط',
+    'bestShort': 'الأفضل',
+    'trend': 'الاتجاه',
+    'timeLeft': 'الوقت المتبقي',
+    'confirmFinish': 'هل تريد إنهاء الامتحان؟',
+    'explanation': 'التوضيح',
+    'yourAnswer': 'إجابتك',
+    'correctAnswer': 'الإجابة الصحيحة',
+    'questionGrid': 'شبكة الأسئلة',
   },
 };
 
 String t(String k) => _t[appState.lang]?[k] ?? _t['tr']![k] ?? k;
 
-// ---------------- الحالة العامة ----------------
 class AppState extends ChangeNotifier {
   String lang = 'tr';
   bool dark = false;
   int best = 0;
   SharedPreferences? _p;
+  List<Map<String, dynamic>> examHistory = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> favoriteQuestions = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> mistakes = <Map<String, dynamic>>[];
 
   Future<void> load() async {
     _p = await SharedPreferences.getInstance();
     lang = _p!.getString('lang') ?? 'tr';
     dark = _p!.getBool('dark') ?? false;
     best = _p!.getInt('best') ?? 0;
+
+    final historyJson = _p!.getString('exam_history') ?? '[]';
+    final favoritesJson = _p!.getString('favorite_questions') ?? '[]';
+    final mistakesJson = _p!.getString('mistakes') ?? '[]';
+
+    try {
+      final decoded = jsonDecode(historyJson);
+      if (decoded is List) {
+        examHistory = decoded
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    } catch (_) {
+      examHistory = <Map<String, dynamic>>[];
+    }
+
+    try {
+      final decoded = jsonDecode(favoritesJson);
+      if (decoded is List) {
+        favoriteQuestions = decoded
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    } catch (_) {
+      favoriteQuestions = <Map<String, dynamic>>[];
+    }
+
+    try {
+      final decoded = jsonDecode(mistakesJson);
+      if (decoded is List) {
+        mistakes = decoded
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    } catch (_) {
+      mistakes = <Map<String, dynamic>>[];
+    }
   }
 
   void setLang(String v) {
@@ -133,6 +301,76 @@ class AppState extends ChangeNotifier {
     _p?.setInt('best', v);
     notifyListeners();
   }
+
+  Future<void> saveExamResult(int score, int total, int durationSeconds) async {
+    final record = <String, dynamic>{
+      'date': DateTime.now().toIso8601String(),
+      'score': score,
+      'total': total,
+      'durationSeconds': durationSeconds,
+    };
+    examHistory.add(record);
+    if (examHistory.length > 30) {
+      examHistory = examHistory.sublist(examHistory.length - 30);
+    }
+    final percent = total == 0 ? 0 : ((score * 100) / total).round();
+    if (percent > best) {
+      best = percent;
+      _p?.setInt('best', best);
+    }
+    await _p?.setString('exam_history', jsonEncode(examHistory));
+    notifyListeners();
+  }
+
+  double get averageScore {
+    if (examHistory.isEmpty) return 0;
+    int totalScore = 0;
+    int totalQuestions = 0;
+    for (final item in examHistory) {
+      final score = item['score'];
+      final total = item['total'];
+      totalScore += score is num ? score.toInt() : 0;
+      totalQuestions += total is num ? total.toInt() : 0;
+    }
+    if (totalQuestions == 0) return 0;
+    return (totalScore * 100) / totalQuestions;
+  }
+
+  int get recentBest {
+    if (examHistory.isEmpty) return 0;
+    int maxPct = 0;
+    for (final item in examHistory) {
+      final score = item['score'];
+      final total = item['total'];
+      final percent = total is num && total != 0
+          ? ((score is num ? score.toInt() : 0) * 100 / total.toInt()).round()
+          : 0;
+      if (percent > maxPct) maxPct = percent;
+    }
+    return maxPct;
+  }
+
+  Future<void> toggleFavoriteQuestion(Question question) async {
+    final map = question.toMap()..['id'] = question.id;
+    final index = favoriteQuestions.indexWhere((entry) => entry['id'] == question.id);
+    if (index >= 0) {
+      favoriteQuestions.removeAt(index);
+    } else {
+      favoriteQuestions.add(map);
+    }
+    await _p?.setString('favorite_questions', jsonEncode(favoriteQuestions));
+    notifyListeners();
+  }
+
+  bool isFavoriteQuestion(String id) =>
+      favoriteQuestions.any((entry) => entry['id'] == id);
+
+  Future<void> addMistakeQuestion(Question question) async {
+    if (mistakes.any((entry) => entry['id'] == question.id)) return;
+    mistakes.add(question.toMap()..['id'] = question.id);
+    await _p?.setString('mistakes', jsonEncode(mistakes));
+    notifyListeners();
+  }
 }
 
 final AppState appState = AppState();
@@ -140,7 +378,14 @@ final AppState appState = AppState();
 List<String> _list(dynamic v) =>
     v is List ? v.map((e) => e.toString()).toList() : <String>[];
 
-// ---------------- main ----------------
+String _formatDuration(int totalSeconds) {
+  final minutes = totalSeconds ~/ 60;
+  final seconds = totalSeconds % 60;
+  return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+}
+
+String _safeCategoryLabel(String value) => value.trim().isEmpty ? 'genel' : value.trim();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
@@ -166,7 +411,9 @@ class CumaSinavApp extends StatelessWidget {
           ),
           darkTheme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
-                seedColor: Colors.red, brightness: Brightness.dark),
+              seedColor: Colors.red,
+              brightness: Brightness.dark,
+            ),
             useMaterial3: true,
           ),
           builder: (context, child) => Directionality(
@@ -183,6 +430,7 @@ class CumaSinavApp extends StatelessWidget {
 
 class AnaSayfa extends StatefulWidget {
   const AnaSayfa({super.key});
+
   @override
   State<AnaSayfa> createState() => _AnaSayfaState();
 }
@@ -200,8 +448,10 @@ class _AnaSayfaState extends State<AnaSayfa> {
     ];
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CUMA SINAV 2026',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'CUMA SINAV 2026',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         centerTitle: true,
         backgroundColor: Colors.red[700],
         foregroundColor: Colors.white,
@@ -212,20 +462,24 @@ class _AnaSayfaState extends State<AnaSayfa> {
         onDestinationSelected: (i) => setState(() => _i = i),
         destinations: [
           NavigationDestination(
-              icon: const Icon(Icons.video_library), label: t('videos')),
+            icon: const Icon(Icons.video_library),
+            label: t('videos'),
+          ),
           NavigationDestination(icon: const Icon(Icons.quiz), label: t('exam')),
           NavigationDestination(
-              icon: const Icon(Icons.admin_panel_settings),
-              label: t('teacher')),
+            icon: const Icon(Icons.admin_panel_settings),
+            label: t('teacher'),
+          ),
           NavigationDestination(
-              icon: const Icon(Icons.settings), label: t('settings')),
+            icon: const Icon(Icons.settings),
+            label: t('settings'),
+          ),
         ],
       ),
     );
   }
 }
 
-// ---------------- 1. الدروس ----------------
 class VideoSayfasi extends StatelessWidget {
   const VideoSayfasi({super.key});
 
@@ -250,15 +504,14 @@ class VideoSayfasi extends StatelessWidget {
             return Card(
               margin: const EdgeInsets.all(8),
               child: ListTile(
-                leading:
-                    const Icon(Icons.play_circle, color: Colors.red, size: 40),
+                leading: const Icon(Icons.play_circle, color: Colors.red, size: 40),
                 title: Text(baslik),
                 subtitle: Text((d['aciklama'] ?? '').toString()),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (_) =>
-                          VideoPlayerEkrani(videoId: id, baslik: baslik)),
+                    builder: (_) => VideoPlayerEkrani(videoId: id, baslik: baslik),
+                  ),
                 ),
               ),
             );
@@ -270,21 +523,26 @@ class VideoSayfasi extends StatelessWidget {
 }
 
 class VideoPlayerEkrani extends StatefulWidget {
+  const VideoPlayerEkrani({
+    super.key,
+    required this.videoId,
+    required this.baslik,
+  });
+
   final String videoId;
   final String baslik;
-  const VideoPlayerEkrani(
-      {super.key, required this.videoId, required this.baslik});
+
   @override
   State<VideoPlayerEkrani> createState() => _VideoPlayerEkraniState();
 }
 
 class _VideoPlayerEkraniState extends State<VideoPlayerEkrani> {
-  late YoutubePlayerController _c;
+  late YoutubePlayerController _controller;
 
   @override
   void initState() {
     super.initState();
-    _c = YoutubePlayerController(
+    _controller = YoutubePlayerController(
       initialVideoId: widget.videoId,
       flags: const YoutubePlayerFlags(autoPlay: true, mute: false),
     );
@@ -292,7 +550,7 @@ class _VideoPlayerEkraniState extends State<VideoPlayerEkrani> {
 
   @override
   void dispose() {
-    _c.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -300,14 +558,28 @@ class _VideoPlayerEkraniState extends State<VideoPlayerEkrani> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(widget.baslik)),
-      body: YoutubePlayer(controller: _c),
+      body: YoutubePlayer(controller: _controller),
     );
   }
 }
 
-// ---------------- 2. الامتحان ----------------
-class SinavSayfasi extends StatelessWidget {
+class SinavSayfasi extends StatefulWidget {
   const SinavSayfasi({super.key});
+
+  @override
+  State<SinavSayfasi> createState() => _SinavSayfasiState();
+}
+
+class _SinavSayfasiState extends State<SinavSayfasi> {
+  String _category = 'all';
+  ExamMode _mode = ExamMode.practice;
+
+  List<Question> _filterQuestions(List<Question> all) {
+    if (_category == 'all') return all;
+    return all
+        .where((question) => question.kategori.toLowerCase() == _category.toLowerCase())
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -320,38 +592,75 @@ class SinavSayfasi extends StatelessWidget {
         if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
+
         final all = snap.data!.docs
-            .map((d) => d.data() as Map<String, dynamic>)
+            .map((doc) => Question.fromMap(doc.id, doc.data() as Map<String, dynamic>))
             .toList();
+
+        final filtered = _filterQuestions(all);
+        final categories = <String>{'all'};
+        for (final q in all) {
+          if (q.kategori.isNotEmpty) categories.add(q.kategori);
+        }
+
         return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('${all.length} ${t('ready')}',
-                  style: const TextStyle(
-                      fontSize: 22, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 20),
-              if (all.isEmpty)
-                Text(t('noQuestions'))
-              else
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                      backgroundColor: Colors.red[700],
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 40, vertical: 15)),
-                  onPressed: () {
-                    final qs = List<Map<String, dynamic>>.from(all)
-                      ..shuffle(Random());
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) =>
-                              QuizSayfasi(sorular: qs.take(examSize).toList())),
-                    );
-                  },
-                  child: Text(t('start'), style: const TextStyle(fontSize: 18)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${filtered.length} ${t('ready')}',
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),
-            ],
+                const SizedBox(height: 14),
+                SegmentedButton<ExamMode>(
+                  segments: const [
+                    ButtonSegment<ExamMode>(value: ExamMode.practice, label: Text('Pratik')),
+                    ButtonSegment<ExamMode>(value: ExamMode.real, label: Text('Gercek Sinav')),
+                  ],
+                  selected: {_mode},
+                  onSelectionChanged: (value) => setState(() => _mode = value.first),
+                ),
+                const SizedBox(height: 12),
+                if (categories.length > 1)
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final category in categories)
+                        ChoiceChip(
+                          label: Text(
+                            category == 'all' ? t('all') : _safeCategoryLabel(category),
+                          ),
+                          selected: _category == category,
+                          onSelected: (_) => setState(() => _category = category),
+                        ),
+                    ],
+                  ),
+                const SizedBox(height: 18),
+                if (filtered.isEmpty)
+                  Text(t('noQuestions'))
+                else
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.red[700],
+                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                    ),
+                    onPressed: () {
+                      final qs = List<Question>.from(filtered)..shuffle(Random());
+                      final questions = qs.take(examSize).toList();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => QuizSayfasi(sorular: questions, mode: _mode),
+                        ),
+                      );
+                    },
+                    child: Text(t('start'), style: const TextStyle(fontSize: 18)),
+                  ),
+              ],
+            ),
           ),
         );
       },
@@ -360,105 +669,215 @@ class SinavSayfasi extends StatelessWidget {
 }
 
 class QuizSayfasi extends StatefulWidget {
-  final List<Map<String, dynamic>> sorular;
-  const QuizSayfasi({super.key, required this.sorular});
+  const QuizSayfasi({super.key, required this.sorular, required this.mode});
+
+  final List<Question> sorular;
+  final ExamMode mode;
+
   @override
   State<QuizSayfasi> createState() => _QuizSayfasiState();
 }
 
 class _QuizSayfasiState extends State<QuizSayfasi> {
-  int index = 0;
-  int score = 0;
-  int? selected;
+  late final List<int?> _answers;
+  late final List<bool> _flagged;
+  int _index = 0;
+  int _secondsLeft = realExamMinutes * 60;
+  Timer? _timer;
+  bool _finished = false;
 
-  void _next() {
-    setState(() {
-      index++;
-      selected = null;
-    });
-    if (index >= widget.sorular.length) {
-      final pct = (score * 100 / widget.sorular.length).round();
-      if (pct > appState.best) appState.setBest(pct);
+  @override
+  void initState() {
+    super.initState();
+    _answers = List<int?>.filled(widget.sorular.length, null, growable: false);
+    _flagged = List<bool>.filled(widget.sorular.length, false, growable: false);
+    if (widget.mode == ExamMode.real) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) return;
+        if (_finished) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          if (_secondsLeft > 0) _secondsLeft--;
+          if (_secondsLeft <= 0) {
+            _finished = true;
+            timer.cancel();
+            _finishExam(finishedByTimer: true);
+          }
+        });
+      });
     }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _selectAnswer(int optionIndex) {
+    final question = widget.sorular[_index];
+    setState(() {
+      _answers[_index] = optionIndex;
+    });
+
+    if (widget.mode == ExamMode.practice && optionIndex != question.dogruIndex) {
+      appState.addMistakeQuestion(question);
+    }
+  }
+
+  void _moveTo(int newIndex) {
+    if (newIndex < 0 || newIndex >= widget.sorular.length) return;
+    setState(() => _index = newIndex);
+  }
+
+  void _finishExam({bool finishedByTimer = false}) {
+    if (_finished) return;
+    _finished = true;
+    _timer?.cancel();
+
+    final total = widget.sorular.length;
+    int correct = 0;
+    final wrong = <Question>[];
+
+    for (int i = 0; i < total; i++) {
+      final question = widget.sorular[i];
+      final selected = _answers[i];
+      if (selected != null && selected == question.dogruIndex) {
+        correct++;
+      } else if (selected != null) {
+        wrong.add(question);
+      }
+    }
+
+    if (widget.mode == ExamMode.real) {
+      final duration = max(1, realExamMinutes * 60 - _secondsLeft);
+      appState.saveExamResult(correct, total, duration);
+    }
+
+    for (final question in wrong) {
+      appState.addMistakeQuestion(question);
+    }
+
+    final passed = ((correct * 100) / max(total, 1)).round() >= passPercent;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => QuizResultSayfasi(
+          questions: widget.sorular,
+          answers: _answers,
+          score: correct,
+          total: total,
+          durationSeconds: max(1, realExamMinutes * 60 - _secondsLeft),
+          passed: passed,
+          mode: widget.mode,
+          finishedByTimer: finishedByTimer,
+        ),
+      ),
+    );
+  }
+
+  void _confirmFinish() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t('finish')),
+        content: Text(t('confirmFinish')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(t('back'))),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _finishExam();
+            },
+            child: Text(t('finish')),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final total = widget.sorular.length;
-
-    if (index >= total) {
-      final pct = (score * 100 / total).round();
-      return Scaffold(
-        appBar: AppBar(title: Text(t('result'))),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('$score / $total', style: const TextStyle(fontSize: 40)),
-              const SizedBox(height: 8),
-              Text('%$pct',
-                  style: TextStyle(
-                      fontSize: 28,
-                      color: pct >= 70 ? Colors.green : Colors.red)),
-              const SizedBox(height: 24),
-              FilledButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(t('back'))),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final q = widget.sorular[index];
-    final soru = (q['soru'] ?? '').toString();
-    final soruAr = (q['soruAr'] ?? '').toString();
-    final siklar = _list(q['siklar']);
-    final siklarAr = _list(q['siklarAr']);
-    final dogru = (q['dogruIndex'] as num?)?.toInt() ?? 0;
-    final resim = (q['resim'] ?? '').toString();
-    final videoRaw = (q['video'] ?? '').toString().trim();
-    final videoId = videoRaw.isEmpty
-        ? ''
-        : (YoutubePlayer.convertUrlToId(videoRaw) ?? videoRaw);
+    final q = widget.sorular[_index];
+    final selected = _answers[_index];
     final ar = appState.lang == 'ar';
 
     return Scaffold(
-      appBar: AppBar(title: Text('${t('question')} ${index + 1}/$total')),
+      appBar: AppBar(
+        title: Text('${t('question')} ${_index + 1}/$total'),
+        actions: [
+          IconButton(
+            icon: Icon(_flagged[_index] ? Icons.flag : Icons.outlined_flag),
+            tooltip: _flagged[_index] ? t('removeFlag') : t('flag'),
+            onPressed: () => setState(() => _flagged[_index] = !_flagged[_index]),
+          ),
+          if (widget.mode == ExamMode.practice)
+            IconButton(
+              icon: Icon(
+                appState.isFavoriteQuestion(q.id)
+                    ? Icons.bookmark
+                    : Icons.bookmark_border,
+              ),
+              onPressed: () => appState.toggleFavoriteQuestion(q),
+            ),
+          if (widget.mode == ExamMode.real)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Center(
+                child: Text(
+                  '${t('timeLeft')}: ${_formatDuration(_secondsLeft)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          LinearProgressIndicator(value: (index + 1) / total),
+          LinearProgressIndicator(value: (_index + 1) / total),
           const SizedBox(height: 16),
-          if (resim.isNotEmpty)
+          if (q.kategori.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Chip(label: Text(_safeCategoryLabel(q.kategori))),
+            ),
+          if (q.resim.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Image.network(
-                resim,
+                q.resim,
                 height: 200,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => const SizedBox.shrink(),
               ),
             ),
-          if (videoId.isNotEmpty)
+          if (q.video.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: QuestionVideo(key: ValueKey('v$index'), videoId: videoId),
+              child: QuestionVideo(
+                key: ValueKey('v${q.id}'),
+                videoId: YoutubePlayer.convertUrlToId(q.video) ?? q.video,
+              ),
             ),
-          Text(soru,
-              style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          if (ar && soruAr.isNotEmpty)
+          Text(q.soru, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          if (ar && q.soruAr.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text(soruAr,
-                  style: const TextStyle(fontSize: 17, color: Colors.teal)),
+              child: Text(
+                q.soruAr,
+                style: const TextStyle(fontSize: 17, color: Colors.teal),
+              ),
             ),
           const SizedBox(height: 16),
-          ...List.generate(siklar.length, (i) {
+          ...List.generate(q.siklar.length, (i) {
             Color? color;
-            if (selected != null) {
-              if (i == dogru) {
+            if (selected != null && widget.mode == ExamMode.practice) {
+              if (i == q.dogruIndex) {
                 color = Colors.green.withOpacity(0.35);
               } else if (i == selected) {
                 color = Colors.red.withOpacity(0.35);
@@ -467,28 +886,254 @@ class _QuizSayfasiState extends State<QuizSayfasi> {
             return Card(
               color: color,
               child: ListTile(
-                title: Text(siklar[i]),
-                subtitle: (ar && i < siklarAr.length && siklarAr[i].isNotEmpty)
-                    ? Text(siklarAr[i],
-                        style: const TextStyle(color: Colors.teal))
+                title: Text(q.siklar[i]),
+                subtitle: (ar && i < q.siklarAr.length && q.siklarAr[i].isNotEmpty)
+                    ? Text(q.siklarAr[i], style: const TextStyle(color: Colors.teal))
                     : null,
-                onTap: selected != null
-                    ? null
-                    : () {
-                        setState(() {
-                          selected = i;
-                          if (i == dogru) score++;
-                        });
-                      },
+                onTap: selected != null ? null : () => _selectAnswer(i),
               ),
             );
           }),
+          if (widget.mode == ExamMode.practice && selected != null) ...[
+            const SizedBox(height: 12),
+            if (q.aciklama.isNotEmpty || q.aciklamaAr.isNotEmpty)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(t('explanation'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Text(
+                        appState.lang == 'ar' && q.aciklamaAr.isNotEmpty
+                            ? q.aciklamaAr
+                            : q.aciklama,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
           const SizedBox(height: 12),
-          if (selected != null)
-            FilledButton(
-              onPressed: _next,
-              child: Text(index == total - 1 ? t('finish') : t('next')),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _index > 0 ? () => _moveTo(_index - 1) : null,
+                  child: const Text('◀'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () {
+                    if (_index < total - 1) {
+                      _moveTo(_index + 1);
+                    } else if (widget.mode == ExamMode.real) {
+                      _confirmFinish();
+                    } else {
+                      _finishExam();
+                    }
+                  },
+                  child: Text(_index == total - 1 ? t('finish') : t('next')),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                children: [
+                  Text(t('questionGrid'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: total,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 5,
+                      mainAxisSpacing: 6,
+                      crossAxisSpacing: 6,
+                    ),
+                    itemBuilder: (context, index) {
+                      final isCurrent = index == _index;
+                      final hasAnswer = _answers[index] != null;
+                      final flagged = _flagged[index];
+                      return InkWell(
+                        onTap: () => _moveTo(index),
+                        child: Container(
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: flagged
+                                ? Colors.amber.withOpacity(0.4)
+                                : (isCurrent ? Colors.red[100] : Colors.grey[200]),
+                            border: Border.all(
+                              color: hasAnswer ? Colors.green : Colors.transparent,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text('${index + 1}'),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class QuizResultSayfasi extends StatelessWidget {
+  const QuizResultSayfasi({
+    super.key,
+    required this.questions,
+    required this.answers,
+    required this.score,
+    required this.total,
+    required this.durationSeconds,
+    required this.passed,
+    required this.mode,
+    required this.finishedByTimer,
+  });
+
+  final List<Question> questions;
+  final List<int?> answers;
+  final int score;
+  final int total;
+  final int durationSeconds;
+  final bool passed;
+  final ExamMode mode;
+  final bool finishedByTimer;
+
+  List<Question> _wrongQuestions() {
+    final wrong = <Question>[];
+    for (int i = 0; i < questions.length; i++) {
+      final selected = answers[i];
+      if (selected != null && selected != questions[i].dogruIndex) {
+        wrong.add(questions[i]);
+      }
+    }
+    return wrong;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = total == 0 ? 0 : ((score * 100) / total).round();
+    final wrongQuestions = _wrongQuestions();
+
+    return Scaffold(
+      appBar: AppBar(title: Text(t('result'))),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                children: [
+                  Text(
+                    '$score / $total',
+                    style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '%$percent',
+                    style: TextStyle(
+                      fontSize: 28,
+                      color: passed ? Colors.green : Colors.red,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    passed ? t('passed') : t('failed'),
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: passed ? Colors.green : Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    mode == ExamMode.real && finishedByTimer
+                        ? 'Süre doldu • ${_formatDuration(durationSeconds)}'
+                        : _formatDuration(durationSeconds),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (wrongQuestions.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: Text('Tüm sorular doğru!'),
+              ),
+            )
+          else ...[
+            Text(
+              t('wrongAnswers'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            for (final question in wrongQuestions) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        appState.lang == 'ar' && question.soruAr.isNotEmpty
+                            ? question.soruAr
+                            : question.soru,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${t('yourAnswer')}: ${question.siklar[(answers[questions.indexWhere((item) => item.id == question.id)] ?? 0)]}',
+                      ),
+                      Text('${t('correctAnswer')}: ${question.siklar[question.dogruIndex]}'),
+                      if ((appState.lang == 'ar' && question.aciklamaAr.isNotEmpty) ||
+                          (appState.lang != 'ar' && question.aciklama.isNotEmpty))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            '${t('explanation')}: ${appState.lang == 'ar' && question.aciklamaAr.isNotEmpty ? question.aciklamaAr : question.aciklama}',
+                            style: const TextStyle(color: Colors.teal),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+          const SizedBox(height: 16),
+          if (wrongQuestions.isNotEmpty)
+            FilledButton(
+              onPressed: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => QuizSayfasi(
+                    sorular: wrongQuestions,
+                    mode: ExamMode.practice,
+                  ),
+                ),
+              ),
+              child: Text(t('retryWrong')),
+            ),
+          const SizedBox(height: 10),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(t('back')),
+          ),
         ],
       ),
     );
@@ -496,19 +1141,21 @@ class _QuizSayfasiState extends State<QuizSayfasi> {
 }
 
 class QuestionVideo extends StatefulWidget {
-  final String videoId;
   const QuestionVideo({super.key, required this.videoId});
+
+  final String videoId;
+
   @override
   State<QuestionVideo> createState() => _QuestionVideoState();
 }
 
 class _QuestionVideoState extends State<QuestionVideo> {
-  late YoutubePlayerController _c;
+  late YoutubePlayerController _controller;
 
   @override
   void initState() {
     super.initState();
-    _c = YoutubePlayerController(
+    _controller = YoutubePlayerController(
       initialVideoId: widget.videoId,
       flags: const YoutubePlayerFlags(autoPlay: false, mute: false),
     );
@@ -516,19 +1163,19 @@ class _QuestionVideoState extends State<QuestionVideo> {
 
   @override
   void dispose() {
-    _c.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return YoutubePlayer(controller: _c, showVideoProgressIndicator: true);
+    return YoutubePlayer(controller: _controller, showVideoProgressIndicator: true);
   }
 }
 
-// ---------------- 3. لوحة المدرّس ----------------
 class AdminSayfasi extends StatefulWidget {
   const AdminSayfasi({super.key});
+
   @override
   State<AdminSayfasi> createState() => _AdminSayfasiState();
 }
@@ -543,14 +1190,11 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
 
   final _soru = TextEditingController();
   final _soruAr = TextEditingController();
-  final List<TextEditingController> _opt =
-      List.generate(4, (_) => TextEditingController());
-  final List<TextEditingController> _optAr =
-      List.generate(4, (_) => TextEditingController());
+  final List<TextEditingController> _opt = List.generate(4, (_) => TextEditingController());
+  final List<TextEditingController> _optAr = List.generate(4, (_) => TextEditingController());
   final _resim = TextEditingController();
   final _video = TextEditingController();
   int _dogru = 0;
-
   final _bulk = TextEditingController();
 
   void _snack(String m) =>
@@ -560,9 +1204,11 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
     setState(() => _busy = true);
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: _email.text.trim(), password: _pass.text);
+        email: _email.text.trim(),
+        password: _pass.text,
+      );
       _pass.clear();
-    } catch (e) {
+    } catch (_) {
       _snack(t('loginError'));
     }
     if (mounted) setState(() => _busy = false);
@@ -571,8 +1217,7 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
   Future<void> _videoEkle() async {
     if (_baslik.text.trim().isEmpty || _youtube.text.trim().isEmpty) return;
     try {
-      final id =
-          YoutubePlayer.convertUrlToId(_youtube.text.trim()) ?? _youtube.text.trim();
+      final id = YoutubePlayer.convertUrlToId(_youtube.text.trim()) ?? _youtube.text.trim();
       await FirebaseFirestore.instance.collection('videolar').add({
         'baslik': _baslik.text.trim(),
         'youtubeId': id,
@@ -591,12 +1236,9 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
     final tr = _opt.map((c) => c.text.trim()).toList();
     final ar = _optAr.map((c) => c.text.trim()).toList();
     final included = <int>[
-      for (int i = 0; i < 4; i++)
-        if (tr[i].isNotEmpty) i
+      for (int i = 0; i < 4; i++) if (tr[i].isNotEmpty) i,
     ];
-    if (_soru.text.trim().isEmpty ||
-        included.length < 2 ||
-        !included.contains(_dogru)) {
+    if (_soru.text.trim().isEmpty || included.length < 2 || !included.contains(_dogru)) {
       _snack(t('fillMore'));
       return;
     }
@@ -609,18 +1251,17 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
         'dogruIndex': included.indexOf(_dogru),
         'resim': _resim.text.trim(),
         'video': _video.text.trim(),
+        'kategori': 'genel',
+        'aciklama': '',
+        'aciklamaAr': '',
         'tarih': FieldValue.serverTimestamp(),
       });
       _soru.clear();
-      _video.clear();
       _soruAr.clear();
       _resim.clear();
-      for (final c in _opt) {
-        c.clear();
-      }
-      for (final c in _optAr) {
-        c.clear();
-      }
+      _video.clear();
+      for (final c in _opt) c.clear();
+      for (final c in _optAr) c.clear();
       _snack(t('added'));
     } catch (e) {
       _snack('${t('error')}: $e');
@@ -633,7 +1274,8 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
       if (data is! List) throw 'JSON list expected';
       final db = FirebaseFirestore.instance;
       var batch = db.batch();
-      int pending = 0, n = 0;
+      int pending = 0;
+      int count = 0;
       for (final e in data) {
         if (e is! Map) continue;
         final siklar = _list(e['siklar']);
@@ -647,10 +1289,13 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
           'dogruIndex': (e['dogruIndex'] as num?)?.toInt() ?? 0,
           'resim': (e['resim'] ?? '').toString(),
           'video': (e['video'] ?? '').toString(),
+          'kategori': (e['kategori'] ?? 'genel').toString(),
+          'aciklama': (e['aciklama'] ?? '').toString(),
+          'aciklamaAr': (e['aciklamaAr'] ?? '').toString(),
           'tarih': FieldValue.serverTimestamp(),
         });
-        n++;
-        pending++;
+        count ++;
+        pending ++;
         if (pending == 400) {
           await batch.commit();
           batch = db.batch();
@@ -659,7 +1304,7 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
       }
       if (pending > 0) await batch.commit();
       _bulk.clear();
-      _snack('$n ${t('imported')}');
+      _snack('$count ${t('imported')}');
     } catch (e) {
       _snack('${t('error')}: $e');
     }
@@ -704,7 +1349,8 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2))
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : Text(t('login')),
           ),
         ],
@@ -730,11 +1376,13 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
             childrenPadding: const EdgeInsets.all(12),
             children: [
               TextField(
-                  controller: _baslik,
-                  decoration: InputDecoration(labelText: t('videoTitle'))),
+                controller: _baslik,
+                decoration: InputDecoration(labelText: t('videoTitle')),
+              ),
               TextField(
-                  controller: _youtube,
-                  decoration: InputDecoration(labelText: t('ytLink'))),
+                controller: _youtube,
+                decoration: InputDecoration(labelText: t('ytLink')),
+              ),
               const SizedBox(height: 10),
               FilledButton(onPressed: _videoEkle, child: Text(t('add'))),
             ],
@@ -746,37 +1394,41 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
             childrenPadding: const EdgeInsets.all(12),
             children: [
               TextField(
-                  controller: _soru,
-                  maxLines: null,
-                  decoration: InputDecoration(labelText: t('qTr'))),
+                controller: _soru,
+                maxLines: null,
+                decoration: InputDecoration(labelText: t('qTr')),
+              ),
               TextField(
-                  controller: _soruAr,
-                  maxLines: null,
-                  decoration: InputDecoration(labelText: t('qAr'))),
+                controller: _soruAr,
+                maxLines: null,
+                decoration: InputDecoration(labelText: t('qAr')),
+              ),
               for (int i = 0; i < 4; i++) ...[
                 TextField(
-                    controller: _opt[i],
-                    decoration:
-                        InputDecoration(labelText: '${t('optTr')} ${i + 1}')),
+                  controller: _opt[i],
+                  decoration: InputDecoration(labelText: '${t('optTr')} ${i + 1}'),
+                ),
                 TextField(
-                    controller: _optAr[i],
-                    decoration: InputDecoration(
-                        labelText: '${t('optAr')} ${i + 1}')),
+                  controller: _optAr[i],
+                  decoration: InputDecoration(labelText: '${t('optAr')} ${i + 1}'),
+                ),
               ],
               TextField(
-                  controller: _resim,
-                  decoration: InputDecoration(labelText: t('imageUrl'))),
+                controller: _resim,
+                decoration: InputDecoration(labelText: t('imageUrl')),
+              ),
               TextField(
-                  controller: _video,
-                  decoration: InputDecoration(labelText: t('videoUrl'))),
+                controller: _video,
+                decoration: InputDecoration(labelText: t('videoUrl')),
+              ),
               const SizedBox(height: 8),
               DropdownButtonFormField<int>(
                 value: _dogru,
                 decoration: InputDecoration(labelText: t('correct')),
                 items: List.generate(
-                    4,
-                    (i) => DropdownMenuItem(
-                        value: i, child: Text('${i + 1}'))),
+                  4,
+                  (i) => DropdownMenuItem(value: i, child: Text('${i + 1}')),
+                ),
                 onChanged: (v) => setState(() => _dogru = v ?? 0),
               ),
               const SizedBox(height: 10),
@@ -794,7 +1446,9 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
                 maxLines: 8,
                 textDirection: TextDirection.ltr,
                 decoration: InputDecoration(
-                    hintText: t('bulkHint'), border: const OutlineInputBorder()),
+                  hintText: t('bulkHint'),
+                  border: const OutlineInputBorder(),
+                ),
               ),
               const SizedBox(height: 10),
               FilledButton(onPressed: _import, child: Text(t('import'))),
@@ -806,7 +1460,6 @@ class _AdminSayfasiState extends State<AdminSayfasi> {
   }
 }
 
-// ---------------- 4. الإعدادات ----------------
 class AyarlarSayfasi extends StatelessWidget {
   const AyarlarSayfasi({super.key});
 
@@ -818,9 +1471,10 @@ class AyarlarSayfasi extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text(t('language'),
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(
+              t('language'),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             SegmentedButton<String>(
               segments: const [
@@ -841,17 +1495,164 @@ class AyarlarSayfasi extends StatelessWidget {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(t('best')),
-              trailing: Text('%${appState.best}',
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold)),
+              trailing: Text(
+                '%${appState.best}',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
             ),
             OutlinedButton(
               onPressed: () => appState.setBest(0),
               child: Text(t('reset')),
             ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.bar_chart),
+              title: Text(t('statistics')),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const StatisticsSayfasi()),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.bookmark),
+              title: Text(t('favorites')),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const FavoritesSayfasi()),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.error_outline),
+              title: Text(t('mistakes')),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MistakesSayfasi()),
+              ),
+            ),
           ],
         );
       },
+    );
+  }
+}
+
+class StatisticsSayfasi extends StatelessWidget {
+  const StatisticsSayfasi({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final avg = appState.averageScore;
+    final best = appState.recentBest;
+    final totalExams = appState.examHistory.length;
+    final trend = totalExams > 1
+        ? appState.examHistory.sublist(max(0, totalExams - 3)).fold<int>(0, (sum, item) {
+            final score = item['score'];
+            final total = item['total'];
+            final percent = total is num && total != 0
+                ? ((score is num ? score.toInt() : 0) * 100 / total.toInt()).round()
+                : 0;
+            return sum + percent;
+          })
+        : 0;
+
+    return Scaffold(
+      appBar: AppBar(title: Text(t('statistics'))),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Card(
+              child: ListTile(
+                title: Text(t('avg')),
+                trailing: Text('${avg.toStringAsFixed(0)}%'),
+              ),
+            ),
+            Card(
+              child: ListTile(
+                title: Text(t('bestShort')),
+                trailing: Text('$best%'),
+              ),
+            ),
+            Card(
+              child: ListTile(
+                title: Text(t('trend')),
+                trailing: Text('${trend > 0 ? '+' : ''}${(trend / max(totalExams, 1)).round()}%'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Toplam deneme: $totalExams'),
+            const SizedBox(height: 12),
+            ...appState.examHistory.reversed.map((entry) {
+              final score = entry['score'];
+              final total = entry['total'];
+              final percent = total is num && total != 0
+                  ? ((score is num ? score.toInt() : 0) * 100 / total.toInt()).round()
+                  : 0;
+              final date = DateTime.tryParse(entry['date']?.toString() ?? '') ?? DateTime.now();
+              return Card(
+                child: ListTile(
+                  title: Text('$score / $total'),
+                  subtitle: Text('$percent% • ${date.toLocal().toString().split(' ').first}'),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class FavoritesSayfasi extends StatelessWidget {
+  const FavoritesSayfasi({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(t('favorites'))),
+      body: appState.favoriteQuestions.isEmpty
+          ? const Center(child: Text('Favori soru yok.'))
+          : ListView(
+              padding: const EdgeInsets.all(12),
+              children: appState.favoriteQuestions.map((entry) {
+                final questionText = (entry['soru'] ?? '').toString();
+                return Card(
+                  child: ListTile(
+                    title: Text(questionText),
+                    subtitle: ((entry['kategori'] ?? '').toString()).isNotEmpty
+                        ? Text((entry['kategori'] ?? '').toString())
+                        : null,
+                  ),
+                );
+              }).toList(),
+            ),
+    );
+  }
+}
+
+class MistakesSayfasi extends StatelessWidget {
+  const MistakesSayfasi({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(t('mistakes'))),
+      body: appState.mistakes.isEmpty
+          ? const Center(child: Text('Hata kaydı yok.'))
+          : ListView(
+              padding: const EdgeInsets.all(12),
+              children: appState.mistakes.map((entry) {
+                final questionText = (entry['soru'] ?? '').toString();
+                final questionAr = (entry['soruAr'] ?? '').toString();
+                return Card(
+                  child: ListTile(
+                    title: Text(questionText),
+                    subtitle: questionAr.isNotEmpty ? Text(questionAr) : null,
+                  ),
+                );
+              }).toList(),
+            ),
     );
   }
 }
